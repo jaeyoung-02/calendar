@@ -1,75 +1,513 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>일정 캘린더</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>일정 공유 & 약속 잡기</title>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --busy-bg: #eff6ff;
+      --busy-border: #dbeafe;
+      --busy-text: #1e40af;
+      --allday-bg: #fef2f2;
+      --allday-border: #fee2e2;
+      --allday-text: #b91c1c;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", sans-serif;
+      background-color: var(--bg); color: var(--text);
+      overscroll-behavior-y: contain;
+    }
+
+    .container {
+      max-width: 960px; margin: 0 auto; padding: 16px;
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px; padding: 4px 4px; gap: 8px; flex-wrap: wrap;
+    }
+
+    .header-left { display: flex; align-items: center; gap: 8px; }
+    header h1 { font-size: 1.15rem; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+    .sync-badge {
+      font-size: 0.72rem; font-weight: 600; color: var(--primary);
+      background: #eff6ff; padding: 2px 8px; border-radius: 999px;
+      transition: opacity 0.3s ease;
+    }
+    .sync-badge.hidden { opacity: 0; pointer-events: none; }
+    .sub-guide { font-size: 0.8rem; color: var(--muted); }
+
+    .calendar-wrapper {
+      background: var(--card); border-radius: 16px; padding: 14px;
+      box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05); flex: 1;
+    }
+
+    .fc-theme-standard td, .fc-theme-standard th { border-color: #f1f5f9 !important; }
+    .fc .fc-toolbar { margin-bottom: 14px !important; }
+    .fc .fc-toolbar-title { font-size: 1.12rem !important; font-weight: 800; letter-spacing: -0.02em; }
+    .fc .fc-button {
+      padding: 6px 11px !important; font-size: 0.85rem !important;
+      border-radius: 10px !important; background: #f1f5f9 !important;
+      border: none !important; color: var(--text) !important; font-weight: 700 !important;
+      box-shadow: none !important;
+    }
+    .fc .fc-button-active, .fc .fc-button:hover {
+      background: var(--primary) !important; color: #fff !important;
+    }
+    .fc-col-header-cell-cushion {
+      font-size: 0.78rem; font-weight: 700; color: var(--muted); padding: 8px 0 !important;
+    }
+    .fc-day-sun .fc-col-header-cell-cushion, .fc-day-sun .fc-daygrid-day-number { color: #ef4444; }
+    .fc-day-sat .fc-col-header-cell-cushion, .fc-day-sat .fc-daygrid-day-number { color: #3b82f6; }
+
+    .fc-daygrid-day { cursor: pointer; transition: background-color 0.12s ease; }
+    .fc-daygrid-day:active { background-color: #f1f5f9 !important; }
+    .fc .fc-daygrid-day-top { justify-content: center; }
+    .fc .fc-daygrid-day-number { font-size: 0.84rem; font-weight: 700; padding: 4px 6px !important; }
+    .fc .fc-day-today { background-color: #f8fafc !important; }
+    .fc .fc-day-today .fc-daygrid-day-number {
+      background: var(--primary); color: #fff !important; border-radius: 999px;
+      min-width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; margin: 2px 0;
+    }
+
+    .fc-daygrid-event {
+      background: var(--busy-bg) !important; border: 1px solid var(--busy-border) !important;
+      border-radius: 5px !important; margin: 2px 3px !important; padding: 2px 5px !important;
+      cursor: pointer;
+    }
+    .fc-daygrid-event.is-allday { background: var(--allday-bg) !important; border-color: var(--allday-border) !important; }
     
-    <style>
-        /* 1. 기본 (데스크탑) 플로팅 버튼 스타일 */
-        .floating-button {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            
-            background-color: #007bff;
-            color: white;
-            padding: 15px 25px; /* 기본 padding */
-            border-radius: 30px;
-            
-            text-decoration: none;
-            font-size: 16px; /* 기본 폰트 크기 */
-            font-family: Arial, sans-serif;
-            
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            z-index: 1000;
-            
-            cursor: pointer;
-            transition: all 0.3s; /* transition에 all을 주어 크기 변경도 부드럽게 */
-        }
+    .custom-time-badge {
+      font-size: 0.74rem; font-weight: 700; color: var(--busy-text);
+      line-height: 1.25; text-align: center;
+    }
+    .is-allday .custom-time-badge { color: var(--allday-text); }
 
-        .floating-button:hover {
-            background-color: #0056b3;
-        }
+    @media (max-width: 600px) {
+      body { background-color: var(--card); }
+      .container { padding: 10px 0 0 0; }
+      header { padding: 0 14px; margin-bottom: 10px; }
+      header h1 { font-size: 1.1rem; }
+      .sub-guide { font-size: 0.75rem; }
 
-        /* 2. [추가됨] 모바일 화면 대응 (미디어 쿼리) */
-        /* 화면 너비(max-width)가 768px 이하일 때 이 스타일을 적용 */
-        @media (max-width: 768px) {
-            .floating-button {
-                padding: 12px 20px; /* 모바일용 padding (조금 더 작게) */
-                font-size: 14px;  /* 모바일용 폰트 크기 (조금 더 작게) */
-                bottom: 20px;     /* 하단 여백 줄임 */
-                right: 20px;      /* 우측 여백 줄임 */
-            }
-        }
-    </style>
+      .calendar-wrapper {
+        border-radius: 0; padding: 6px 2px 16px;
+        box-shadow: none; border-top: 1px solid var(--border);
+      }
+      .fc .fc-toolbar { padding: 0 10px; margin-bottom: 10px !important; }
+      .fc .fc-toolbar-title { font-size: 1.02rem !important; }
+      .fc .fc-button { padding: 5px 9px !important; font-size: 0.8rem !important; }
+      
+      .fc .fc-daygrid-day-frame { min-height: 84px !important; padding-bottom: 2px; }
+      .fc .fc-daygrid-day-number { font-size: 0.8rem; padding: 3px 4px !important; }
+      .fc .fc-day-today .fc-daygrid-day-number { min-width: 21px; height: 21px; font-size: 0.76rem; }
+
+      .fc-daygrid-event {
+        margin: 1.5px 1.5px !important; padding: 2px 1px !important; border-radius: 4px !important;
+      }
+      .custom-time-badge { font-size: 0.68rem; line-height: 1.15; letter-spacing: -0.02em; }
+      .time-end-line { display: block; font-size: 0.64rem; opacity: 0.88; }
+      .fc-daygrid-more-link {
+        display: block; text-align: center; font-size: 0.68rem !important; font-weight: 800;
+        color: var(--primary) !important; background: #eff6ff; border-radius: 4px;
+        margin: 1px 2px; padding: 1px 0;
+      }
+    }
+
+    /* 바텀시트 모달 */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(15, 23, 42, 0.5); z-index: 999;
+      align-items: flex-end; justify-content: center;
+      backdrop-filter: blur(2px);
+    }
+    .modal-backdrop.open { display: flex; }
+    .bottom-sheet {
+      background: #fff; width: 100%; max-width: 500px; max-height: 90vh;
+      overflow-y: auto; border-radius: 22px 22px 0 0; padding: 10px 20px 26px;
+      animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .sheet-handle {
+      width: 38px; height: 4px; background: #cbd5e1;
+      border-radius: 999px; margin: 0 auto 12px;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .sheet-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+    .sheet-title { font-size: 1.08rem; font-weight: 800; }
+    .close-btn {
+      background: #f1f5f9; border: none; border-radius: 8px;
+      padding: 6px 12px; font-size: 0.85rem; font-weight: 700; color: var(--muted); cursor: pointer;
+    }
+
+    .section-label { font-size: 0.82rem; font-weight: 700; color: var(--muted); margin: 12px 0 8px; }
+    .time-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+    .time-item {
+      padding: 6px 10px; background: var(--busy-bg); border: 1px solid var(--busy-border);
+      border-radius: 8px; font-weight: 700; color: var(--busy-text); font-size: 0.84rem;
+    }
+    .time-item.is-allday-item {
+      background: var(--allday-bg); border-color: var(--allday-border); color: var(--allday-text);
+    }
+    .empty-msg { font-size: 0.86rem; color: #16a34a; font-weight: 700; }
+
+    /* 종일 일정 약속 불가 안내 박스 */
+    .blocked-box {
+      display: none;
+      margin-top: 16px;
+      padding: 20px 16px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 14px;
+      text-align: center;
+    }
+    .blocked-box h3 {
+      margin: 0 0 6px;
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #b91c1c;
+    }
+    .blocked-box p {
+      margin: 0 0 16px;
+      font-size: 0.88rem;
+      color: #7f1d1d;
+      line-height: 1.5;
+    }
+
+    .booking-form {
+      margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border);
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .time-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+    
+    select, input, textarea {
+      width: 100%; padding: 11px 12px; border: 1px solid var(--border);
+      border-radius: 10px; font-size: 16px; font-family: inherit;
+      background-color: #fff; color: var(--text);
+    }
+    select:focus, input:focus, textarea:focus { outline: none; border-color: var(--primary); }
+    
+    .submit-btn {
+      margin-top: 6px; background: var(--primary); color: #fff;
+      border: none; border-radius: 12px; padding: 14px;
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+    }
+    .submit-btn:hover { background: var(--primary-hover); }
+    .submit-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    .success-box {
+      display: none; text-align: center; padding: 24px 8px 12px;
+    }
+    .success-box h3 { margin: 0 0 8px; font-size: 1.12rem; color: #16a34a; }
+    .success-box p { margin: 0 0 18px; font-size: 0.9rem; color: var(--muted); line-height: 1.5; }
+    .done-btn {
+      width: 100%; padding: 13px; border-radius: 12px; border: none;
+      background: #f1f5f9; color: var(--text); font-weight: 700; font-size: 0.95rem; cursor: pointer;
+    }
+  </style>
 </head>
 <body>
 
-    <iframe src="https://calendar.google.com/calendar/embed?height=800&wkst=1&ctz=Asia%2FSeoul&showPrint=0&showTabs=0&showCalendars=0&showTz=0&showTitle=0&src=amFlMC44MDcyQGdtYWlsLmNvbQ&src=OWZjMzQ5NDljYzdkODFkOTU3YTI0ZmFiZjQzNjgxMjk0N2JjNDdjMGMxZTlkMzdkYzM3NjFjODE2MjlmMjdjOEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t&src=MzZiODdhNjE2ZDU1YmE4MGE1MjY1Y2QwMTM5OGEwYWJiMmM3MmQ1MDQ0NDQxMjhmZTJjOTJjMmU1YzQwZTA3ZEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t&src=YTc5MDNjNDQzZWQ0ZjVlYWVjNDQ4NmEyYjE0MTZjMjRhZWMyNTM4YTY1ZTAwMTdjYzMzMjI2ZTM5MmNjZTk2MUBncm91cC5jYWxlbmRhci5nb29nbGUuY29t&src=Zjk5NmI5NjcwMDVlZDBiNDUzODEzNmJjYjdjNTIzMDJhNDAzMDg2ZTgwNDc2MTMwNGQ5MGY5NWFjOWU1ZDlkMEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t&src=MThlYjM0MTFhY2RiNTYwYTE5OTgzNWI0MDRhYWU2Yzc5NjAwYjE0NmQwMmNlYzYzZDgwMTQyODZlNzk4NjlhM0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t&src=a28uc291dGhfa29yZWEjaG9saWRheUBncm91cC52LmNhbGVuZGFyLmdvb2dsZS5jb20&color=%23616161&color=%23616161&color=%239e69af&color=%23e4c441&color=%23d50000&color=%23f09300&color=%23d50000" style="border-width:0" width="1200" height="800" frameborder="0" scrolling="no"></iframe>
-    
-<!-- Google Calendar Appointment Scheduling begin -->
-<link href="https://calendar.google.com/calendar/scheduling-button-script.css" rel="stylesheet">
-<script src="https://calendar.google.com/calendar/scheduling-button-script.js" async></script>
+<div class="container">
+  <header>
+    <div class="header-left">
+      <h1>일정 현황</h1>
+      <span class="sync-badge" id="syncBadge">일정 동기화 중...</span>
+    </div>
+    <span class="sub-guide">날짜 터치 시 약속 신청 가능</span>
+  </header>
+
+  <div class="calendar-wrapper" id="swipeArea">
+    <div id="calendar"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="dayModal" onclick="closeModal()">
+  <div class="bottom-sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title" id="modalDateTitle">날짜</div>
+      <button class="close-btn" onclick="closeModal()">닫기</button>
+    </div>
+
+    <div id="formSection">
+      <div class="section-label">예약/일정 현황</div>
+      <ul class="time-list" id="modalTimeList"></ul>
+
+      <!-- 종일 일정이 있을 경우 표시되는 약속 불가 안내 -->
+      <div class="blocked-box" id="blockedNotice">
+        <h3>⛔ 약속 신청 불가</h3>
+        <p>해당 날짜에는 종일 일정이 등록되어 있어<br/>새로운 약속을 신청할 수 없습니다. 다른 날짜를 선택해주세요.</p>
+        <button type="button" class="done-btn" style="background:#fee2e2; color:#991b1b;" onclick="closeModal()">다른 날짜 선택하기</button>
+      </div>
+
+      <!-- 일반 날짜일 경우 표시되는 약속 신청 폼 -->
+      <form class="booking-form" id="bookingForm" onsubmit="submitBooking(event)">
+        <div class="section-label" style="margin: 0;">약속 잡기 신청 (24시간 기준)</div>
+        <input type="hidden" id="selectedDate" />
+        
+        <div class="time-row">
+          <select id="startTime" required></select>
+          <span>~</span>
+          <select id="endTime" required></select>
+        </div>
+
+        <input type="text" id="guestName" placeholder="성함 또는 소속 (예: 홍길동)" required />
+        <input type="text" id="guestContact" placeholder="연락처 또는 이메일" required />
+        <textarea id="guestMemo" rows="2" placeholder="간단한 용건이나 메모 (선택)"></textarea>
+
+        <button type="submit" class="submit-btn" id="submitBtn">약속 잡기 요청 보내기</button>
+      </form>
+    </div>
+
+    <div class="success-box" id="successSection">
+      <h3>✅ 약속 요청이 접수되었습니다!</h3>
+      <p>일정 확인 후 입력하신 연락처로 회신드리겠습니다.</p>
+      <button type="button" class="done-btn" onclick="closeModal()">확인</button>
+    </div>
+  </div>
+</div>
+
 <script>
-(function() {
-  var target = document.currentScript;
-  window.addEventListener('load', function() {
-    calendar.schedulingButton.load({
-      url: 'https://calendar.google.com/calendar/appointments/AcZssZ01U22PJO0A6txW6USHrnbSVcUesMgQkuNxRdk=?gv=true',
-      color: '#616161',
-      label: '일정 예약',
-      target,
+  const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzO_XvbHMGVBFLvV-BLiKkA2qbw1PXrcZC9ZSpl1uCNroMOz0BXqHHSRzEbpI2wov-24w/exec';
+  const LOCAL_CACHE_KEY = 'calendar_events_cache_v2';
+
+  let allEvents = [];
+  let calendarInstance = null;
+
+  function init24HourSelects() {
+    const startSel = document.getElementById('startTime');
+    const endSel = document.getElementById('endTime');
+    startSel.innerHTML = '';
+    endSel.innerHTML = '';
+
+    for (let h = 0; h < 24; h++) {
+      for (let m of [0, 30]) {
+        const hh = String(h).padStart(2, '0');
+        const mm = String(m).padStart(2, '0');
+        const timeStr = `${hh}:${mm}`;
+
+        startSel.add(new Option(timeStr, timeStr));
+        endSel.add(new Option(timeStr, timeStr));
+      }
+    }
+    endSel.add(new Option('23:59', '23:59'));
+
+    startSel.value = '14:00';
+    endSel.value = '15:00';
+
+    startSel.addEventListener('change', function () {
+      if (endSel.value <= startSel.value) {
+        const nextIdx = Math.min(startSel.selectedIndex + 2, endSel.options.length - 1);
+        endSel.selectedIndex = nextIdx;
+      }
     });
+  }
+
+  function initSwipeNavigation() {
+    const area = document.getElementById('swipeArea');
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    area.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+      touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    area.addEventListener('touchend', (e) => {
+      if (!calendarInstance) return;
+      const diffX = e.changedTouches[0].screenX - touchStartX;
+      const diffY = e.changedTouches[0].screenY - touchStartY;
+
+      if (Math.abs(diffX) > 60 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+        if (diffX < 0) calendarInstance.next();
+        else calendarInstance.prev();
+      }
+    }, { passive: true });
+  }
+
+  function updateCalendarEvents(events) {
+    allEvents = events;
+    if (!calendarInstance) return;
+    calendarInstance.removeAllEvents();
+    calendarInstance.addEventSource(events);
+  }
+
+  document.addEventListener('DOMContentLoaded', async function () {
+    init24HourSelects();
+    initSwipeNavigation();
+
+    const calendarEl = document.getElementById('calendar');
+    const syncBadge = document.getElementById('syncBadge');
+
+    try {
+      const saved = localStorage.getItem(LOCAL_CACHE_KEY);
+      if (saved) allEvents = JSON.parse(saved);
+    } catch (e) {}
+
+    calendarInstance = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      locale: 'ko',
+      height: 'auto',
+      fixedWeekCount: false,
+      dayMaxEvents: 2,
+      headerToolbar: { left: 'prev,next', center: 'title', right: 'today' },
+      buttonText: { today: '오늘' },
+      events: allEvents,
+      dayCellContent: (arg) => arg.dayNumberText.replace('일', ''),
+      eventContent: (arg) => {
+        const title = arg.event.title;
+        if (title.includes('~')) {
+          const [s, e] = title.split('~');
+          return {
+            html: `<div class="custom-time-badge"><span>${s}</span><span class="time-end-line">~${e}</span></div>`
+          };
+        }
+        return { html: `<div class="custom-time-badge">${title}</div>` };
+      },
+      eventClassNames: (arg) => arg.event.allDay ? ['is-allday'] : [],
+      dateClick: (info) => openDayDetail(info.dateStr),
+      eventClick: (info) => openDayDetail(info.event.startStr.split('T')[0])
+    });
+
+    calendarInstance.render();
+
+    try {
+      const response = await fetch(GAS_WEBAPP_URL);
+      const freshEvents = await response.json();
+      updateCalendarEvents(freshEvents);
+      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(freshEvents));
+      syncBadge.classList.add('hidden');
+    } catch (err) {
+      syncBadge.textContent = '오프라인 모드';
+    }
   });
-})();
+
+  function openDayDetail(dateStr) {
+    document.getElementById('formSection').style.display = 'block';
+    document.getElementById('successSection').style.display = 'none';
+
+    const modal = document.getElementById('dayModal');
+    const titleEl = document.getElementById('modalDateTitle');
+    const listEl = document.getElementById('modalTimeList');
+    const bookingFormEl = document.getElementById('bookingForm');
+    const blockedNoticeEl = document.getElementById('blockedNotice');
+
+    document.getElementById('selectedDate').value = dateStr;
+
+    const [y, m, d] = dateStr.split('-');
+    titleEl.textContent = `${Number(m)}월 ${Number(d)}일`;
+
+    const dayEvents = allEvents.filter(ev => ev.start.startsWith(dateStr));
+    listEl.innerHTML = '';
+
+    // 해당 날짜에 '종일' 일정이 있는지 검사
+    const hasAllDay = dayEvents.some(ev => ev.allDay === true || ev.title === '종일');
+
+    if (dayEvents.length === 0) {
+      listEl.innerHTML = '<li class="empty-msg">등록된 일정이 없습니다. 자유롭게 신청 가능합니다!</li>';
+    } else {
+      dayEvents.forEach(ev => {
+        const li = document.createElement('li');
+        li.className = ev.allDay ? 'time-item is-allday-item' : 'time-item';
+        li.textContent = ev.title;
+        listEl.appendChild(li);
+      });
+    }
+
+    // 종일 일정이 있으면 신청 폼을 숨기고 약속 불가 안내 출력
+    if (hasAllDay) {
+      bookingFormEl.style.display = 'none';
+      blockedNoticeEl.style.display = 'block';
+    } else {
+      bookingFormEl.style.display = 'flex';
+      blockedNoticeEl.style.display = 'none';
+    }
+
+    modal.classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('dayModal').classList.remove('open');
+  }
+
+  async function submitBooking(e) {
+    e.preventDefault();
+    const dateStr = document.getElementById('selectedDate').value;
+    const dayEvents = allEvents.filter(ev => ev.start.startsWith(dateStr));
+
+    // 이중 안전장치: 종일 일정 날짜 제출 차단
+    if (dayEvents.some(ev => ev.allDay === true || ev.title === '종일')) {
+      alert('종일 일정이 있는 날짜는 약속을 신청할 수 없습니다.');
+      return;
+    }
+
+    const startTime = document.getElementById('startTime').value;
+    const endTime = document.getElementById('endTime').value;
+
+    if (endTime <= startTime) {
+      alert('종료 시간은 시작 시간보다 늦어야 합니다.');
+      return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = '요청 전송 중...';
+
+    const payload = {
+      date: dateStr,
+      startTime: startTime,
+      endTime: endTime,
+      name: document.getElementById('guestName').value.trim(),
+      contact: document.getElementById('guestContact').value.trim(),
+      memo: document.getElementById('guestMemo').value.trim()
+    };
+
+    try {
+      await fetch(GAS_WEBAPP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      document.getElementById('bookingForm').reset();
+      document.getElementById('startTime').value = '14:00';
+      document.getElementById('endTime').value = '15:00';
+      document.getElementById('formSection').style.display = 'none';
+      document.getElementById('successSection').style.display = 'block';
+    } catch (err) {
+      alert('전송 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '약속 잡기 요청 보내기';
+    }
+  }
 </script>
-<!-- end Google Calendar Appointment Scheduling -->
+
 <script src="https://d13y6yw5lp6lle.cloudfront.net/sdk/zerotalk.js"></script>
 <script>
   window.ZeroCall('boot', {
     publicKey: 'pk_68cb1fba86c041cdb7d0c79f87c5d003',
   });
 </script>
+
 </body>
 </html>
