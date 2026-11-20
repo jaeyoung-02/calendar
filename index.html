@@ -192,6 +192,19 @@
       line-height: 1.5;
     }
 
+    /* 시간 중복 실시간 경고 메시지 */
+    .conflict-warning {
+      display: none;
+      padding: 9px 12px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      color: #b91c1c;
+      font-size: 0.82rem;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
     .booking-form {
       margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border);
       display: flex; flex-direction: column; gap: 10px;
@@ -204,6 +217,7 @@
       background-color: #fff; color: var(--text);
     }
     select:focus, input:focus, textarea:focus { outline: none; border-color: var(--primary); }
+    select.has-error { border-color: #ef4444; background-color: #fef2f2; color: #b91c1c; }
     
     .submit-btn {
       margin-top: 6px; background: var(--primary); color: #fff;
@@ -249,7 +263,7 @@
     </div>
 
     <div id="formSection">
-      <div class="section-label">예약/일정 현황</div>
+      <div class="section-label">예약/일정 현황 (아래 시간 외 비어 있는 시간을 선택해주세요)</div>
       <ul class="time-list" id="modalTimeList"></ul>
 
       <!-- 종일 일정이 있을 경우 표시되는 약속 불가 안내 -->
@@ -268,6 +282,10 @@
           <select id="startTime" required></select>
           <span>~</span>
           <select id="endTime" required></select>
+        </div>
+
+        <div class="conflict-warning" id="conflictWarning">
+          ⚠️ 선택한 시간은 이미 등록된 일정과 겹칩니다. 비어 있는 시간으로 변경해주세요.
         </div>
 
         <input type="text" id="guestName" placeholder="성함 또는 소속 (예: 홍길동)" required />
@@ -292,6 +310,70 @@
 
   let allEvents = [];
   let calendarInstance = null;
+
+  // "HH:mm" 문자열을 분(minute) 단위 숫자로 변환 (예: "14:30" -> 870)
+  function timeToMinutes(tStr) {
+    const [h, m] = tStr.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  // 선택한 날짜와 시간이 기존 일정과 겹치거나 동일한지 검사
+  function checkTimeOverlap(dateStr, startStr, endStr) {
+    const reqStart = timeToMinutes(startStr);
+    const reqEnd = timeToMinutes(endStr);
+    if (reqEnd <= reqStart) return true;
+
+    const dayEvents = allEvents.filter(ev => ev.start.startsWith(dateStr));
+    for (const ev of dayEvents) {
+      if (ev.allDay || ev.title === '종일') return true;
+      if (ev.title && ev.title.includes('~')) {
+        const [evStartStr, evEndStr] = ev.title.split('~');
+        const evStart = timeToMinutes(evStartStr.trim());
+        const evEnd = timeToMinutes(evEndStr.trim());
+        // 겹침/동일 조건: 요청시작 < 기존종료 && 요청종료 > 기존시작
+        if (reqStart < evEnd && reqEnd > evStart) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // 시간 선택 변경 시 실시간 검증 및 버튼 활성/비활성화
+  function validateSelectedTime() {
+    const dateStr = document.getElementById('selectedDate').value;
+    const startSel = document.getElementById('startTime');
+    const endSel = document.getElementById('endTime');
+    const warningEl = document.getElementById('conflictWarning');
+    const submitBtn = document.getElementById('submitBtn');
+
+    if (!dateStr) return false;
+
+    if (endSel.value <= startSel.value) {
+      warningEl.textContent = '⚠️ 종료 시간은 시작 시간보다 늦어야 합니다.';
+      warningEl.style.display = 'block';
+      startSel.classList.add('has-error');
+      endSel.classList.add('has-error');
+      submitBtn.disabled = true;
+      return false;
+    }
+
+    const isConflict = checkTimeOverlap(dateStr, startSel.value, endSel.value);
+    if (isConflict) {
+      warningEl.textContent = '⚠️ 이미 일정이 있는 시간과 겹치거나 동일합니다. 다른 시간을 선택해주세요.';
+      warningEl.style.display = 'block';
+      startSel.classList.add('has-error');
+      endSel.classList.add('has-error');
+      submitBtn.disabled = true;
+      return false;
+    } else {
+      warningEl.style.display = 'none';
+      startSel.classList.remove('has-error');
+      endSel.classList.remove('has-error');
+      submitBtn.disabled = false;
+      return true;
+    }
+  }
 
   function init24HourSelects() {
     const startSel = document.getElementById('startTime');
@@ -319,7 +401,10 @@
         const nextIdx = Math.min(startSel.selectedIndex + 2, endSel.options.length - 1);
         endSel.selectedIndex = nextIdx;
       }
+      validateSelectedTime();
     });
+
+    endSel.addEventListener('change', validateSelectedTime);
   }
 
   function initSwipeNavigation() {
@@ -419,7 +504,6 @@
     const dayEvents = allEvents.filter(ev => ev.start.startsWith(dateStr));
     listEl.innerHTML = '';
 
-    // 해당 날짜에 '종일' 일정이 있는지 검사
     const hasAllDay = dayEvents.some(ev => ev.allDay === true || ev.title === '종일');
 
     if (dayEvents.length === 0) {
@@ -433,13 +517,28 @@
       });
     }
 
-    // 종일 일정이 있으면 신청 폼을 숨기고 약속 불가 안내 출력
     if (hasAllDay) {
       bookingFormEl.style.display = 'none';
       blockedNoticeEl.style.display = 'block';
     } else {
       bookingFormEl.style.display = 'flex';
       blockedNoticeEl.style.display = 'none';
+
+      // 기본 시간(14:00~15:00)이 겹치면 09:00~21:00 사이 비어 있는 첫 1시간 슬롯 자동 추천
+      document.getElementById('startTime').value = '14:00';
+      document.getElementById('endTime').value = '15:00';
+      if (checkTimeOverlap(dateStr, '14:00', '15:00')) {
+        for (let h = 9; h <= 20; h++) {
+          const s = `${String(h).padStart(2, '0')}:00`;
+          const e = `${String(h + 1).padStart(2, '0')}:00`;
+          if (!checkTimeOverlap(dateStr, s, e)) {
+            document.getElementById('startTime').value = s;
+            document.getElementById('endTime').value = e;
+            break;
+          }
+        }
+      }
+      validateSelectedTime();
     }
 
     modal.classList.add('open');
@@ -451,22 +550,11 @@
 
   async function submitBooking(e) {
     e.preventDefault();
+    if (!validateSelectedTime()) return;
+
     const dateStr = document.getElementById('selectedDate').value;
-    const dayEvents = allEvents.filter(ev => ev.start.startsWith(dateStr));
-
-    // 이중 안전장치: 종일 일정 날짜 제출 차단
-    if (dayEvents.some(ev => ev.allDay === true || ev.title === '종일')) {
-      alert('종일 일정이 있는 날짜는 약속을 신청할 수 없습니다.');
-      return;
-    }
-
     const startTime = document.getElementById('startTime').value;
     const endTime = document.getElementById('endTime').value;
-
-    if (endTime <= startTime) {
-      alert('종료 시간은 시작 시간보다 늦어야 합니다.');
-      return;
-    }
 
     const btn = document.getElementById('submitBtn');
     btn.disabled = true;
@@ -482,15 +570,31 @@
     };
 
     try {
-      await fetch(GAS_WEBAPP_URL, {
+      const res = await fetch(GAS_WEBAPP_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
+      const result = await res.json();
+
+      if (result.status === 'conflict') {
+        alert(result.message || '선택하신 시간은 이미 등록된 일정과 겹칩니다.');
+        btn.disabled = false;
+        btn.textContent = '약속 잡기 요청 보내기';
+        return;
+      }
+
+      // 방금 신청한 시간도 즉시 화면 일정 목록에 반영해 연속 중복 신청 방지
+      allEvents.push({
+        title: `${startTime}~${endTime}`,
+        start: `${dateStr}T${startTime}:00+09:00`,
+        end: `${dateStr}T${endTime}:00+09:00`,
+        allDay: false
+      });
+      updateCalendarEvents(allEvents);
+      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(allEvents));
 
       document.getElementById('bookingForm').reset();
-      document.getElementById('startTime').value = '14:00';
-      document.getElementById('endTime').value = '15:00';
       document.getElementById('formSection').style.display = 'none';
       document.getElementById('successSection').style.display = 'block';
     } catch (err) {
